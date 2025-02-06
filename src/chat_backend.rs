@@ -58,7 +58,7 @@ pub struct Message {
 
 pub fn display_message(message: &Message) -> String {
     format!(
-        "ID: {}\nChannel: {}\nAuthor: {}\nContent: {}\n--------------------",
+        "{{\"message_id\": {}, \"channel_id\": \"{}\", \"author\": \"{}\", \"body\": \"{}\"}}",
         message.id, message.channel_id, message.author, message.content
     )
 }
@@ -66,7 +66,7 @@ pub fn display_message(message: &Message) -> String {
 pub trait ChatBackend {
     fn login(&self, username: &str, password: &str) -> Result<String, LoginError>;
     fn list_channels(&self) -> Vec<Channel>;
-    fn get_messages(&self, channel_id: &str) -> Option<Vec<Message>>;
+    fn get_messages(&self) -> Option<Vec<Message>>;
     fn post_message(&self, channel_id: &str, author: &str, content: &str) -> Result<(), PostError>;
 }
 

@@ -21,18 +21,18 @@ impl ChatBackend for DummyBackend {
             }
         ]
     }
-    fn get_messages(&self, channel_id: &str) -> Option<Vec<Message>> {
+    fn get_messages(&self) -> Option<Vec<Message>> {
         let mut rng = rand::rng();
         let msg1 = Message {
             id: rng.random::<u64>(),
-            channel_id: channel_id.to_string(),
+            channel_id: "dummy_channel1".to_string(),
             author: "Dummy Author".to_string(),
             content: format!("Random message: {}", rng.random_range(0..100)),
         };
         let msg2 = Message {
             id: rng.random::<u64>(),
-            channel_id: channel_id.to_string(),
-            author: "Dummy Author".to_string(),
+            channel_id: "dummy_channel2".to_string(),
+            author: "Another Dummy Author".to_string(),
             content: format!("Random message: {}", rng.random_range(0..100)),
         };
 
