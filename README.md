@@ -64,6 +64,25 @@ cargo build --release
 
 ### Running
 
+To start the backend in live mode (streaming events and listening for JSON commands), run:
+
 ```bash
-./target/release/kbunified --live
+./target/release/unified_backend --live
 ```
+
+When launched, the backend will:
+
+- Connect to the configured messaging services (chat protocols and mail).
+- Open an IPC socket (for example, /tmp/chat_commands.sock) to receive JSON-formatted commands from frontends.
+- Begin streaming JSON events (e.g., new messages, channel/mailbox updates) to stdout or another designated output channel.
+
+
+## Contributing
+
+Contributions, bug reports, and feature requests are welcome. Please open an issue or submit a pull request on GitHub.
+
+## License
+
+This project is licensed under the MIT License.
+
+
