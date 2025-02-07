@@ -60,6 +60,7 @@ Clone the repository and build the project in release mode:
 git clone <repository-url>
 cd <repository-directory>
 cargo build --release
+```
 
 ### Running
 
