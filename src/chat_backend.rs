@@ -1,3 +1,8 @@
+use serde::{Serialize, Deserialize};
+use futures::Stream;
+use std::sync::{Arc, Mutex};
+use std::pin::Pin;
+
 #[derive(Debug)]
 pub enum LoginError {
     InvalidCredentials,
@@ -40,14 +45,24 @@ impl fmt::Display for PostError {
 
 impl std::error::Error for PostError {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Channel {
     pub id: String,
     pub name: String,
     // You can add other fields such as description, members, etc.
 }
 
-#[derive(Debug, Clone)]
+
+/// Backend state containing the list of channels.
+/// In a more complete implementation, you might also store
+/// persistent connections or other state here.
+#[derive(Debug)]
+pub struct MyBackendState {
+    pub channels: Vec<Channel>,
+}
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub id: u64,
     pub channel_id: String,
@@ -63,11 +78,23 @@ pub fn display_message(message: &Message) -> String {
     )
 }
 
+/// Events that the backend sends to frontends, serialized as JSON.
+/// The `#[serde(tag = "event")]` attribute means that each variant
+/// will include an `"event"` field in the JSON output.
+#[derive(Debug, Serialize)]
+#[serde(tag = "event")]
+pub enum BackendEvent {
+    #[serde(rename = "channel_list")]
+    ChannelList { channels: Vec<Channel> },
+    #[serde(rename = "message")]
+    Message { channel_id: String, message_id: u64, body: String, author: String },
+}
+
 pub trait ChatBackend {
     fn login(&self, username: &str, password: &str) -> Result<String, LoginError>;
-    fn list_channels(&self) -> Vec<Channel>;
-    fn get_messages(&self) -> Option<Vec<Message>>;
-    fn post_message(&self, channel_id: &str, author: &str, content: &str) -> Result<(), PostError>;
+    fn list_channels(&self) -> BackendEvent;
+    fn get_messages(&self) -> Pin<Box<dyn Stream<Item = BackendEvent> + Send>>;
+    fn post_message(&self, channel_id: &str, content: &str) -> Result<(), PostError>;
 }
 
 

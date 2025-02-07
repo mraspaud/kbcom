@@ -1,101 +1,186 @@
-mod chat_backend; // Ensure this module declaration includes your trait definitions.
-mod dummy_backend; // This includes your DummyBackend implementation.
+// mod chat_backend; // Ensure this module declaration includes your trait definitions.
+// mod dummy_backend; // This includes your DummyBackend implementation.
+//
+// // Import the trait and the backend implementation.
+// use std::thread;
+// use std::env;
+// use std::time::Duration;
+// use chat_backend::{ChatBackend, display_message};
+// use dummy_backend::DummyBackend;
+//
+// fn main() {
+//     let args: Vec<String> = env::args().collect();
+//     let backend = DummyBackend;
+//
+//     // List channels and pick the first one.
+//     let channels = backend.list_channels();
+//     if let Some(first_channel) = channels.first() {
+//         if args.contains(&"--live".to_string()) {
+//             loop {
+//                 if let Some(messages) = backend.get_messages() {
+//                     // Print each message.
+//                     for message in messages {
+//                         println!("{}", display_message(&message));
+//                     }
+//                 }
+//                 thread::sleep(Duration::from_secs(1));
+//             }
+//         } else {
+//             if let Some(messages) = backend.get_messages() {
+//                 // Print each message.
+//                 for message in messages {
+//                     println!("{}: {}", message.id, message.content);
+//                 }
+//             } else {
+//                 println!("No messages found in channel {}", first_channel.id);
+//             }
+//         }
+//     } else {
+//         println!("No channels available");
+//     }
+// }
+//
 
-// Import the trait and the backend implementation.
-use std::thread;
-use std::env;
-use std::time::Duration;
-use chat_backend::{ChatBackend, display_message};
+
+use std::sync::{Arc, Mutex};
+use tokio::time::{sleep, Duration};
+use tokio::net::UnixListener;
+use tokio::io::AsyncReadExt;
+use std::path::Path;
+use std::fs;
+
+mod chat_backend;
+mod dummy_backend;
+use chat_backend::{ChatBackend, MyBackendState, BackendEvent, Channel};
 use dummy_backend::DummyBackend;
+use serde::{Serialize, Deserialize};
+use serde_json::Value;
+use futures::StreamExt;
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    let backend = DummyBackend;
-
-    // List channels and pick the first one.
-    let channels = backend.list_channels();
-    if let Some(first_channel) = channels.first() {
-        if args.contains(&"--live".to_string()) {
-            loop {
-                if let Some(messages) = backend.get_messages() {
-                    // Print each message.
-                    for message in messages {
-                        println!("{}", display_message(&message));
-                    }
-                }
-                thread::sleep(Duration::from_secs(1));
-            }
-        } else {
-            if let Some(messages) = backend.get_messages() {
-                // Print each message.
-                for message in messages {
-                    println!("{}: {}", message.id, message.content);
-                }
-            } else {
-                println!("No messages found in channel {}", first_channel.id);
-            }
+impl MyBackendState {
+    pub fn new() -> Self {
+        // Create dummy channels for demonstration.
+        Self {
+            channels: vec![
+                Channel {
+                    id: "dummy_channel_1".to_string(),
+                    name: "Dummy Channel 1".to_string(),
+                },
+                Channel {
+                    id: "dummy_channel_2".to_string(),
+                    name: "Dummy Channel oj".to_string(),
+                },
+                Channel {
+                    id: "dummy_channel_3".to_string(),
+                    name: "Dummy Channel 3".to_string(),
+                },
+            ],
         }
-    } else {
-        println!("No channels available");
     }
 }
 
-// use std::sync::{Arc, Mutex};
-// use std::thread;
-// use std::time::Duration;
-// use tokio::net::UnixListener;
-// use tokio::prelude::*;
-//
-// // A shared state for the active channel.
-// #[derive(Clone)]
-// struct BackendState {
-//     active_channel: Arc<Mutex<String>>,
-// }
-//
-// impl BackendState {
-//     fn new(initial: &str) -> Self {
-//         Self {
-//             active_channel: Arc::new(Mutex::new(initial.to_string())),
-//         }
-//     }
-//     fn set_channel(&self, new_channel: &str) {
-//         let mut chan = self.active_channel.lock().unwrap();
-//         *chan = new_channel.to_string();
-//     }
-//     fn get_channel(&self) -> String {
-//         self.active_channel.lock().unwrap().clone()
-//     }
-// }
-//
-// #[tokio::main]
-// async fn main() {
-//     // Initialize your backend state with a default channel.
-//     let state = BackendState::new("dummy_channel_1");
-//
-//     // Spawn a task to listen for channel-switch commands.
-//     let state_for_socket = state.clone();
-//     tokio::spawn(async move {
-//         // Listen on a Unix domain socket (or TCP port).
-//         let listener = UnixListener::bind("/tmp/chat_backend.sock").unwrap();
-//         loop {
-//             let (mut socket, _) = listener.accept().await.unwrap();
-//             let mut buf = vec![0; 1024];
-//             let n = socket.read(&mut buf).await.unwrap();
-//             let command = String::from_utf8_lossy(&buf[..n]);
-//             // A simple protocol: if the command starts with "switch ", update the channel.
-//             if command.starts_with("switch ") {
-//                 let new_channel = command.trim_start_matches("switch ").trim();
-//                 println!("Switching channel to {}", new_channel);
-//                 state_for_socket.set_channel(new_channel);
-//             }
-//         }
-//     });
-//
-//     // Main message loop: fetch and print messages based on the active channel.
-//     loop {
-//         let current_channel = state.get_channel();
-//         // (Replace this with your actual message fetching logic)
-//         println!("Message from {}: Random number {}", current_channel, rand::random::<u32>());
-//         thread::sleep(Duration::from_secs(1));
-//     }
-// }
+/// This asynchronous function streams events to stdout.
+/// It first sends an event with the full channel list, then enters
+/// a loop where it sends a new message event every second.
+
+async fn stream_events<B>(backend: Arc<Mutex<B>>)
+where
+    B: ChatBackend + Send + 'static,
+{
+    // Send the initial channel list event.
+    {
+        //let state = state.lock().unwrap();
+        let event = backend.lock().unwrap().list_channels();
+        // Print the serialized JSON event.
+        println!("{}", serde_json::to_string(&event).unwrap());
+    }
+
+    let stream = backend.lock().unwrap().get_messages();
+    // Merge the streams into a single stream that yields messages from both sources.
+    let mut combined_stream = futures::stream::select_all(vec![
+        Box::pin(stream),
+        // Box::pin(stream2),
+    ]);
+
+    // Process messages as they arrive from any of the dummy backends.
+    while let Some(message) = combined_stream.next().await {
+        println!("{}", serde_json::to_string(&message).unwrap());
+    }
+}
+
+// Define a guard that will remove the socket file on drop.
+struct UnixSocketGuard {
+    path: String,
+}
+
+impl UnixSocketGuard {
+    fn new(path: impl Into<String>) -> Self {
+        Self { path: path.into() }
+    }
+}
+
+impl Drop for UnixSocketGuard {
+    fn drop(&mut self) {
+        if Path::new(&self.path).exists() {
+            match fs::remove_file(&self.path) {
+                Ok(_) => println!("Socket file {} removed.", self.path),
+                Err(e) => eprintln!("Failed to remove socket file {}: {}", self.path, e),
+            }
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    // Initialize your backend state, connections, etc.
+    let state = Arc::new(Mutex::new(MyBackendState::new()));
+    // Create a shared backend instance.
+    let backend = Arc::new(Mutex::new(DummyBackend::new()));
+    // Start the task that streams events (channel list and messages).
+    tokio::spawn(stream_events(backend.clone()));
+    // Create the guard—this will ensure the file is removed when the program exits.
+    let socket_path = "/tmp/chat_commands.sock";
+    // Remove the socket file if it exists from previous runs.
+    if Path::new(socket_path).exists() {
+        fs::remove_file(socket_path).expect("Failed to remove existing socket file");
+    }
+    let _socket_guard = UnixSocketGuard::new(socket_path);
+
+     // Listen for incoming commands on a Unix socket.
+    let listener = UnixListener::bind(socket_path).unwrap();
+    loop {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let backend = backend.clone();
+        tokio::spawn(async move {
+            let mut buf = vec![0; 1024];
+            match socket.read(&mut buf).await {
+                Ok(n) if n > 0 => {
+                    let cmd_str = String::from_utf8_lossy(&buf[..n]);
+                    if let Ok(json_val) = serde_json::from_str::<Value>(&cmd_str) {
+                        if let Some(cmd) = json_val.get("command").and_then(|c| c.as_str()) {
+                            match cmd {
+                                "post_message" => {
+                                    let channel_id = json_val.get("channel_id").and_then(|v| v.as_str()).unwrap_or("");
+                                    let body = json_val.get("body").and_then(|v| v.as_str()).unwrap_or("");
+                                    backend.lock().unwrap().post_message(channel_id, body);
+                                    // Process post_message; for example:
+                                    // eprintln!("Posting message in {:?}: {:?}", channel_id, body);
+                                    // Use your state to actually post the message.
+                                }
+                                "leave_channel" => {
+                                    let channel_id = json_val.get("channel_id").and_then(|v| v.as_str());
+                                    eprintln!("Leaving channel {:?}", channel_id);
+                                    // Process the leave command.
+                                }
+                                _ => {
+                                    println!("Unknown command: {}", cmd);
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        });
+    }
+}
