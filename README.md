@@ -1,4 +1,4 @@
-# KBCom, Unified Communication Backend
+# KBUnified, Unified Communication Backend
 
 ## Overview
 
@@ -64,5 +64,5 @@ cargo build --release
 ### Running
 
 ```bash
-./target/release/kbcom --live
+./target/release/kbunified --live
 ```
