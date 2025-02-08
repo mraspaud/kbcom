@@ -2,6 +2,7 @@ use serde::{Serialize, Deserialize};
 use futures::Stream;
 use std::sync::{Arc, Mutex};
 use std::pin::Pin;
+use async_trait::async_trait;
 
 #[derive(Debug)]
 pub enum LoginError {
@@ -90,11 +91,12 @@ pub enum BackendEvent {
     Message { channel_id: String, message_id: u64, body: String, author: String },
 }
 
+#[async_trait]
 pub trait ChatBackend {
-    fn login(&self, username: &str, password: &str) -> Result<String, LoginError>;
+    async fn login(&self, username: &str, password: &str) -> Result<String, LoginError>;
     fn list_channels(&self) -> BackendEvent;
     fn get_messages(&self) -> Pin<Box<dyn Stream<Item = BackendEvent> + Send>>;
-    fn post_message(&self, channel_id: &str, content: &str) -> Result<(), PostError>;
+    async fn post_message(&self, channel_id: &str, content: &str) -> Result<(), PostError>;
 }
 
 

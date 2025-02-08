@@ -6,6 +6,7 @@ use futures::Stream;
 use tokio::time::{sleep, Duration};
 use std::sync::{Arc, Mutex};
 use std::pin::Pin;
+use async_trait::async_trait;
 
 pub struct DummyBackend {
     posted_messages: Arc<Mutex<Vec<BackendEvent>>>,
@@ -19,9 +20,10 @@ impl DummyBackend {
     }
 }
 
+#[async_trait]
 impl ChatBackend for DummyBackend {
     // Implement the trait methods here.
-    fn login(&self, username: &str, password: &str) -> Result<String, LoginError> {
+    async fn login(&self, username: &str, password: &str) -> Result<String, LoginError> {
         Ok("dummy_session_token".to_string())
     }
     fn list_channels(&self) -> BackendEvent {
@@ -77,7 +79,7 @@ impl ChatBackend for DummyBackend {
         Box::pin(s)
     }
 
-    fn post_message(&self, channel_id: &str, content: &str) -> Result<(), PostError> {
+    async fn post_message(&self, channel_id: &str, content: &str) -> Result<(), PostError> {
         let message = BackendEvent::Message {
             message_id: 0u64,
             channel_id: channel_id.to_string(),
@@ -85,6 +87,7 @@ impl ChatBackend for DummyBackend {
             body: content.to_string(),
         };
         let mut table = self.posted_messages.lock().unwrap();
+        println!("pushing message");
         table.push(message);
         Ok(())
     }
