@@ -1,6 +1,5 @@
 use serde::{Serialize, Deserialize};
 use futures::Stream;
-use std::sync::{Arc, Mutex};
 use std::pin::Pin;
 use async_trait::async_trait;
 
@@ -51,15 +50,6 @@ pub struct Channel {
     pub id: String,
     pub name: String,
     // You can add other fields such as description, members, etc.
-}
-
-
-/// Backend state containing the list of channels.
-/// In a more complete implementation, you might also store
-/// persistent connections or other state here.
-#[derive(Debug)]
-pub struct MyBackendState {
-    pub channels: Vec<Channel>,
 }
 
 
